@@ -45,8 +45,10 @@ userFamilies.get('/:userId', (request, response) => {
 
   admin
     .firestore()
+    // First get all families for specified user
     .collection(`users/${userId}/families`)
     .get()
+    // Then iterate each familyId and then get each family
     .then(userFamilySnaps => {
       const promises = [];
       userFamilySnaps.forEach(userFamilySnap => {
@@ -60,6 +62,7 @@ userFamilies.get('/:userId', (request, response) => {
 
       return Promise.all(promises);
     })
+    // Then collect the families and join them to a reternatble value
     .then(familySnaps => {
       const result = [];
       familySnaps.forEach(familySnap => {
