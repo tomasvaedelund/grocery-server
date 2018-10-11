@@ -1,11 +1,18 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
-import { environment } from './environments/environment';
-admin.initializeApp(environment.firebase);
+admin.initializeApp();
+
+import * as express from 'express';
+import * as cors from 'cors';
 
 import { IFamily } from './models/IFamily';
+import { IUserFamily } from './models/IUserFamily';
 
-// Listen for any change on collection `families`
+/* *************
+  DB Triggers
+************** */
+
+// Listen for creation of a new family on collection `families`
 exports.onCreateFamily = functions.firestore
   .document('families/{familyId}')
   .onCreate((snap, context) => {
@@ -17,3 +24,58 @@ exports.onCreateFamily = functions.firestore
       .collection(`users/${uid}/families`)
       .add({ familyId: snap.id });
   });
+
+/* *************
+  HTTP Endpoints
+************** */
+
+// Could need som authentication?
+// https://github.com/firebase/functions-samples/blob/master/authorized-https-endpoint/functions/index.js
+
+// Inspiration
+// https://codeburst.io/express-js-on-cloud-functions-for-firebase-86ed26f9144c
+
+// All http endpoints
+
+// GET - All families for specified user
+const userFamilies = express();
+userFamilies.use(cors({ origin: true }));
+userFamilies.get('/:userId', (request, response) => {
+  const userId = request.params.userId;
+
+  admin
+    .firestore()
+    .collection(`users/${userId}/families`)
+    .get()
+    .then(userFamilySnaps => {
+      const promises = [];
+      userFamilySnaps.forEach(userFamilySnap => {
+        const userFamily = userFamilySnap.data() as IUserFamily;
+        const promise = admin
+          .firestore()
+          .doc(`families/${userFamily.familyId}`)
+          .get();
+        promises.push(promise);
+      });
+
+      return Promise.all(promises);
+    })
+    .then(familySnaps => {
+      const result = [];
+      familySnaps.forEach(familySnap => {
+        const family = familySnap.data() as IFamily;
+        result.push(family);
+      });
+
+      response.send({ families: result });
+    })
+    .catch(err => {
+      response.status(500).send({ error: err });
+    });
+});
+
+export const getUserFamilies = functions.https.onRequest(
+  (request, response) => {
+    return userFamilies(request, response);
+  }
+);
