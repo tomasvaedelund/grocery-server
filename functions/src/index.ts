@@ -2,10 +2,10 @@ import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 admin.initializeApp();
 
-import * as express from 'express';
-import * as cors from 'cors';
+// import * as express from 'express';
+// import * as cors from 'cors';
 
-import { IGroup, IMembership, IUserGroupsResponse } from './models';
+import { IGroup, IMembership } from './models';
 
 /* *************
   DB Triggers
@@ -45,50 +45,50 @@ exports.onCreateGroup = functions.firestore
 // All http endpoints
 
 // GET - All groups for specified user
-const userGroups = express();
-userGroups.use(cors({ origin: true }));
-userGroups.get('/:userId', (request, response) => {
-  const userId = request.params.userId;
+// const userGroups = express();
+// userGroups.use(cors({ origin: true }));
+// userGroups.get('/:userId', (request, response) => {
+//   const userId = request.params.userId;
 
-  admin
-    .firestore()
-    // First get all groups for specified user
-    .collection(`memberships`)
-    .where('userId', '==', userId)
-    .get()
-    // Then iterate each groupId and then get details for each group
-    .then(membershipsSnap => {
-      const promises = [];
-      membershipsSnap.forEach(membershipSnap => {
-        const membership = membershipSnap.data() as IMembership;
-        const promise = admin
-          .firestore()
-          .doc(`groups/${membership.groupId}`)
-          .get();
-        promises.push(promise);
-      });
+//   admin
+//     .firestore()
+//     // First get all groups for specified user
+//     .collection(`memberships`)
+//     .where('userId', '==', userId)
+//     .get()
+//     // Then iterate each groupId and then get details for each group
+//     .then(membershipsSnap => {
+//       const promises = [];
+//       membershipsSnap.forEach(membershipSnap => {
+//         const membership = membershipSnap.data() as IMembership;
+//         const promise = admin
+//           .firestore()
+//           .doc(`groups/${membership.groupId}`)
+//           .get();
+//         promises.push(promise);
+//       });
 
-      return Promise.all(promises);
-    })
-    // Then collect the groups and join them to a returnable value
-    .then(groupsSnap => {
-      const groups = [];
-      groupsSnap.forEach(groupSnap => {
-        const group = groupSnap.data() as IGroup;
-        groups.push(group);
-      });
+//       return Promise.all(promises);
+//     })
+//     // Then collect the groups and join them to a returnable value
+//     .then(groupsSnap => {
+//       const groups: IGroup[] = [];
+//       groupsSnap.forEach(groupSnap => {
+//         const group = groupSnap.data() as IGroup;
+//         groups.push(group);
+//       });
 
-      const userGroupsResponse: IUserGroupsResponse = {
-        groups
-      };
+//       const userGroupsResponse: IUserGroupsResponse = {
+//         groups
+//       };
 
-      response.send(userGroupsResponse);
-    })
-    .catch(err => {
-      response.status(500).send({ error: err });
-    });
-});
+//       response.send(userGroupsResponse);
+//     })
+//     .catch(err => {
+//       response.status(500).send({ error: err });
+//     });
+// });
 
-export const getUserGroups = functions.https.onRequest((request, response) => {
-  return userGroups(request, response);
-});
+// export const getUserGroups = functions.https.onRequest((request, response) => {
+//   return userGroups(request, response);
+// });
