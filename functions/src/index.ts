@@ -5,24 +5,31 @@ admin.initializeApp();
 import * as express from 'express';
 import * as cors from 'cors';
 
-import { IFamily } from './models/IFamily';
-import { IUserFamily } from './models/IUserFamily';
+import { IGroup, IMembership, IUserGroupsResponse } from './models';
 
 /* *************
   DB Triggers
 ************** */
 
-// Listen for creation of a new family on collection `families`
-exports.onCreateFamily = functions.firestore
-  .document('families/{familyId}')
+// Listen for creation of a new group on collection `groups`
+exports.onCreateGroup = functions.firestore
+  .document('groups/{groupId}')
   .onCreate((snap, context) => {
-    const newFamily = snap.data() as IFamily;
-    const uid = newFamily.createdBy;
+    const newGroup = snap.data() as IGroup;
+    const userId = newGroup.createdBy;
+    const groupId = snap.id;
+
+    const newMembership: IMembership = {
+      userId,
+      groupId,
+      joinedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
 
     return admin
       .firestore()
-      .collection(`users/${uid}/families`)
-      .add({ familyId: snap.id });
+      .collection(`memberships`)
+      .doc(`${userId}_${groupId}`)
+      .set(newMembership);
   });
 
 /* *************
@@ -37,48 +44,51 @@ exports.onCreateFamily = functions.firestore
 
 // All http endpoints
 
-// GET - All families for specified user
-const userFamilies = express();
-userFamilies.use(cors({ origin: true }));
-userFamilies.get('/:userId', (request, response) => {
+// GET - All groups for specified user
+const userGroups = express();
+userGroups.use(cors({ origin: true }));
+userGroups.get('/:userId', (request, response) => {
   const userId = request.params.userId;
 
   admin
     .firestore()
-    // First get all families for specified user
-    .collection(`users/${userId}/families`)
+    // First get all groups for specified user
+    .collection(`memberships`)
+    .where('userId', '==', userId)
     .get()
-    // Then iterate each familyId and then get each family
-    .then(userFamilySnaps => {
+    // Then iterate each groupId and then get details for each group
+    .then(membershipsSnap => {
       const promises = [];
-      userFamilySnaps.forEach(userFamilySnap => {
-        const userFamily = userFamilySnap.data() as IUserFamily;
+      membershipsSnap.forEach(membershipSnap => {
+        const membership = membershipSnap.data() as IMembership;
         const promise = admin
           .firestore()
-          .doc(`families/${userFamily.familyId}`)
+          .doc(`groups/${membership.groupId}`)
           .get();
         promises.push(promise);
       });
 
       return Promise.all(promises);
     })
-    // Then collect the families and join them to a reternatble value
-    .then(familySnaps => {
-      const result = [];
-      familySnaps.forEach(familySnap => {
-        const family = familySnap.data() as IFamily;
-        result.push(family);
+    // Then collect the groups and join them to a returnable value
+    .then(groupsSnap => {
+      const groups = [];
+      groupsSnap.forEach(groupSnap => {
+        const group = groupSnap.data() as IGroup;
+        groups.push(group);
       });
 
-      response.send({ families: result });
+      const userGroupsResponse: IUserGroupsResponse = {
+        groups
+      };
+
+      response.send(userGroupsResponse);
     })
     .catch(err => {
       response.status(500).send({ error: err });
     });
 });
 
-export const getUserFamilies = functions.https.onRequest(
-  (request, response) => {
-    return userFamilies(request, response);
-  }
-);
+export const getUserGroups = functions.https.onRequest((request, response) => {
+  return userGroups(request, response);
+});
