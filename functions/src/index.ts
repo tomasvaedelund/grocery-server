@@ -11,7 +11,7 @@ import { IGroup, IMembership } from './models';
   DB Triggers
 ************** */
 
-// Listen for creation of a new group on collection `groups`
+// Listen for creation of a new group
 exports.onCreateGroup = functions.firestore
   .document('groups/{groupId}')
   .onCreate((snap, context) => {
@@ -30,6 +30,32 @@ exports.onCreateGroup = functions.firestore
       .collection(`memberships`)
       .doc(`${userId}_${groupId}`)
       .set(newMembership);
+  });
+
+// Listen for deletion of a group and then delete belonging memberships
+exports.onDeleteGroup = functions.firestore
+  .document('groups/{groupId}')
+  .onDelete(async (snap, context) => {
+    const deletedGroupId = snap.id;
+    const affectedMemberships = admin
+      .firestore()
+      .collection('memberships')
+      .where('groupId', '==', deletedGroupId);
+
+    const batch = admin.firestore().batch();
+
+    await affectedMemberships.get().then(membershipsSnap => {
+      membershipsSnap.forEach(membershipSnap => {
+        const membershipRef = admin
+          .firestore()
+          .collection('memberships')
+          .doc(membershipSnap.id);
+
+        batch.delete(membershipRef);
+      });
+    });
+
+    return batch.commit();
   });
 
 /* *************
