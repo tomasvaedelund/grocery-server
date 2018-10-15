@@ -58,6 +58,30 @@ exports.onDeleteGroup = functions.firestore
     return batch.commit();
   });
 
+// Listen for deletion of a membership and if it's the last then also delete the group
+exports.onDeleteMembership = functions.firestore
+  .document('memberships/{pushId}')
+  .onDelete(async (snap, context) => {
+    const deletedGroupId = snap.data().groupId;
+    const test = admin
+      .firestore()
+      .collection('memberships')
+      .where('groupId', '==', deletedGroupId);
+
+    const memberships = await test.get().then(membershipsSnap => {
+      return membershipsSnap.docs.length;
+    });
+
+    if (memberships === 0) {
+      return admin
+        .firestore()
+        .doc(`/groups/${deletedGroupId}`)
+        .delete();
+    }
+
+    return null;
+  });
+
 /* *************
   HTTP Endpoints
 ************** */
